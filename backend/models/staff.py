@@ -1,0 +1,1 @@
+"""Staff ORM model."""

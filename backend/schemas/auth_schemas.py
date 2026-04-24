@@ -1,0 +1,1 @@
+"""Authentication schema definitions."""

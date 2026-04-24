@@ -1,0 +1,1 @@
+"""Reservation schema definitions."""
