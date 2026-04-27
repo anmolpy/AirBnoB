@@ -13,6 +13,7 @@ from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import create_access_token, set_access_cookies
 from pydantic import ValidationError
 
+from app import limiter
 from database import db
 from models.guest import Guest
 from schemas.auth_schemas import GuestSessionOut, GuestTokenRequest, error
@@ -22,6 +23,7 @@ guest_auth_bp = Blueprint("guest_auth", __name__)
 
 
 @guest_auth_bp.post("/verify")
+@limiter.limit("30 per minute")     # OWASP A07 — prevent token scanning / amplification
 def verify_guest_token():
     """
     Validate a guest QR token and issue a short-lived guest session.

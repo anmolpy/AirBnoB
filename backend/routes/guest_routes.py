@@ -7,6 +7,7 @@ from flask_jwt_extended import get_jwt, get_jwt_identity, jwt_required, unset_jw
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app import limiter
 from database import db
 from models.guest import Guest
 from models.reservation import Reservation, ReservationStatus
@@ -19,11 +20,12 @@ guest_bp = Blueprint("guest", __name__)
 
 
 @guest_bp.post("/book")
+@limiter.limit("20 per hour")       # OWASP A07 — prevent reservation flooding and room enumeration
 def book_guest_room():
     """Create a public reservation and issue a guest token for later check-in."""
-    body = _validate_json(CreateReservationRequest)
+    body, err = _validate_json(CreateReservationRequest)
     if body is None:
-        return _validation_error_response()
+        return _validation_error_response(err)
 
     conflicts = _find_conflicts(body.room_id, body.check_in, body.check_out)
     if conflicts:

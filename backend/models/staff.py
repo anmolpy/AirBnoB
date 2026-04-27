@@ -75,7 +75,8 @@ class Staff(Base):
 
     # Auth
     password_hash: Mapped[str] = mapped_column(
-        String(72),         # bcrypt output is always 60 chars; 72 gives headroom
+        String(255),        # bcrypt output is 60 chars; 255 gives safe headroom
+                            # for any future hash format without risk of truncation
         nullable=False,
     )
 

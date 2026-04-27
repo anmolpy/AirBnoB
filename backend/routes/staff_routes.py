@@ -89,9 +89,9 @@ def get_reservation(reservation_id: int):
 @require_role(StaffRole.ADMIN, StaffRole.FRONT_DESK)
 def create_reservation():
     """Create a reservation and linked guest record."""
-    body = _validate_json(CreateReservationRequest)
+    body, err = _validate_json(CreateReservationRequest)
     if body is None:
-        return _validation_error_response()
+        return _validation_error_response(err)
 
     conflicts = _find_conflicts(body.room_id, body.check_in, body.check_out)
     if conflicts:
@@ -133,9 +133,9 @@ def update_reservation(reservation_id: int):
     if reservation.status != ReservationStatus.PENDING:
         return jsonify(error("Only pending reservations can be updated.")), 409
 
-    body = _validate_json(UpdateReservationRequest)
+    body, err = _validate_json(UpdateReservationRequest)
     if body is None:
-        return _validation_error_response()
+        return _validation_error_response(err)
 
     new_check_in = body.check_in if body.check_in is not None else reservation.check_in
     new_check_out = body.check_out if body.check_out is not None else reservation.check_out
@@ -174,9 +174,9 @@ def cancel_reservation(reservation_id: int):
     if reservation is None:
         return jsonify(error("Reservation not found.")), 404
 
-    body = _validate_json(CancelReservationRequest)
+    body, err = _validate_json(CancelReservationRequest)
     if body is None:
-        return _validation_error_response()
+        return _validation_error_response(err)
 
     try:
         reservation.cancel(db.session)
@@ -197,9 +197,9 @@ def cancel_reservation(reservation_id: int):
 @require_role(StaffRole.ADMIN, StaffRole.FRONT_DESK)
 def check_in_guest():
     """Activate a pending reservation."""
-    body = _validate_json(CheckInRequest)
+    body, err = _validate_json(CheckInRequest)
     if body is None:
-        return _validation_error_response()
+        return _validation_error_response(err)
 
     reservation = _reservation_by_id(body.reservation_id)
     if reservation is None:
@@ -223,9 +223,9 @@ def check_in_guest():
 @require_role(StaffRole.ADMIN, StaffRole.FRONT_DESK)
 def check_out_guest():
     """Check out an active guest and purge their PII."""
-    body = _validate_json(CheckOutRequest)
+    body, err = _validate_json(CheckOutRequest)
     if body is None:
-        return _validation_error_response()
+        return _validation_error_response(err)
 
     reservation = _reservation_by_id(body.reservation_id)
     if reservation is None:
@@ -288,32 +288,32 @@ def check_availability():
     ), 200
 
 
-_LAST_VALIDATION_ERROR: str | None = None
+def _validate_json(schema_cls) -> tuple:
+    """
+    Validate request JSON through a Pydantic schema.
 
+    Returns:
+        (parsed_body, None)  on success
+        (None, error_msg)    on failure
 
-def _validate_json(schema_cls):
-    """Validate request JSON through a Pydantic schema."""
-    global _LAST_VALIDATION_ERROR
-
+    No global state — safe under multi-threaded WSGI servers.
+    """
     raw = request.get_json(silent=True)
     if not raw:
-        _LAST_VALIDATION_ERROR = "Request body must be JSON."
-        return None
+        return None, "Request body must be JSON."
 
     try:
-        _LAST_VALIDATION_ERROR = None
-        return schema_cls.model_validate(raw)
+        return schema_cls.model_validate(raw), None
     except ValidationError as exc:
-        _LAST_VALIDATION_ERROR = "; ".join(
+        msg = "; ".join(
             f"{'.'.join(str(loc) for loc in item['loc'])}: {item['msg']}"
             for item in exc.errors()
         )
-        return None
+        return None, msg
 
 
-def _validation_error_response():
-    """Return the most recent request validation error."""
-    message = _LAST_VALIDATION_ERROR or "Validation error."
+def _validation_error_response(message: str):
+    """Return a validation error response for the given message."""
     status = 400 if message == "Request body must be JSON." else 422
     return jsonify(error(message)), status
 

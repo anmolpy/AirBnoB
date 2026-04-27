@@ -105,9 +105,10 @@ class Guest(Base):
         """
         Erase guest PII and mark the record as checked out.
 
-        Call this in the checkout route (staff_routes.py) immediately after
-        the reservation is marked complete. Satisfies the proposal's data
-        minimization requirement — no PII sits in the DB after the stay ends.
+        Mutates state only — does NOT commit. The caller (check_out_guest)
+        is responsible for the commit so that the reservation status update
+        and the PII purge land in the same transaction with no gap between
+        them where status is CHECKED_OUT but PII still exists.
 
         What is erased:   full_name, email
         What is retained: token, room_id, check_in, check_out, timestamps
@@ -117,7 +118,6 @@ class Guest(Base):
         self.email          = None
         self.checked_out_at = datetime.now(tz=timezone.utc)
         session.add(self)
-        session.commit()
 
     # Class-level helpers
 
@@ -143,6 +143,9 @@ class Guest(Base):
 
         Run this nightly via a cron job or Flask CLI command to ensure
         no stale PII lingers past checkout date.
+
+        Note: mutates fields directly rather than calling purge_pii() so
+        that a single session.commit() covers all rows in one transaction.
 
         Returns the number of records cleaned.
         """

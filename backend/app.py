@@ -98,15 +98,21 @@ def _load_config(app: Flask, config_name: str | None) -> None:
 def _assert_production_safe(app: Flask) -> None:
     """
     OWASP A05 — Security Misconfiguration guard.
-    Raises immediately if debug mode is on in a production environment.
-    This prevents accidentally deploying with debug=True.
+    Raises immediately if debug mode is on or the JWT secret is default
+    in a production environment.
     """
     env = os.environ.get("FLASK_ENV", "development")
-    if env == "production" and app.debug:
-        raise RuntimeError(
-            "FATAL: Flask debug mode is enabled in a production environment. "
-            "Set FLASK_DEBUG=0 or FLASK_ENV=production without debug=True."
-        )
+    if env == "production":
+        if app.debug:
+            raise RuntimeError(
+                "FATAL: Flask debug mode is enabled in a production environment. "
+                "Set FLASK_DEBUG=0 or FLASK_ENV=production without debug=True."
+            )
+        if app.config.get("JWT_SECRET_KEY") == "CHANGE_ME_IN_PROD":
+            raise RuntimeError(
+                "FATAL: JWT_SECRET_KEY has not been set for production. "
+                "Set the JWT_SECRET_KEY environment variable to a strong random secret."
+            )
 
 
 def _init_extensions(app: Flask) -> None:

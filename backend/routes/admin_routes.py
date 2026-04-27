@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from auth.decorators import require_role
 from database import db
@@ -37,9 +38,9 @@ def list_staff():
 @require_role(StaffRole.ADMIN)
 def create_staff():
     """Create a new admin or front-desk account."""
-    body = _validate_json(CreateStaffRequest)
+    body, err = _validate_json(CreateStaffRequest)
     if body is None:
-        return _validation_error_response()
+        return _validation_error_response(err)
 
     existing = db.session.scalars(
         select(Staff).where(Staff.email == body.email)
@@ -71,6 +72,22 @@ def deactivate_staff(staff_id: int):
     if not staff.is_active:
         return jsonify(error("Staff account is already inactive.")), 409
 
+    # Security #5 — prevent self-deactivation
+    current_admin_id = int(get_jwt_identity())
+    if staff.id == current_admin_id:
+        return jsonify(error("You cannot deactivate your own account.")), 403
+
+    # Security #6 — prevent deactivating the last active admin
+    if staff.role == StaffRole.ADMIN:
+        active_admin_count = db.session.scalar(
+            select(func.count()).select_from(Staff).where(
+                Staff.role == StaffRole.ADMIN,
+                Staff.is_active == True,
+            )
+        )
+        if active_admin_count <= 1:
+            return jsonify(error("Cannot deactivate the last active admin account.")), 409
+
     staff.is_active = False
     db.session.commit()
     return jsonify(StaffOut.model_validate(staff).model_dump()), 200
@@ -92,31 +109,31 @@ def reactivate_staff(staff_id: int):
     return jsonify(StaffOut.model_validate(staff).model_dump()), 200
 
 
-_LAST_VALIDATION_ERROR: str | None = None
+def _validate_json(schema_cls) -> tuple:
+    """
+    Validate request JSON through a Pydantic schema.
 
+    Returns:
+        (parsed_body, None)  on success
+        (None, error_msg)    on failure
 
-def _validate_json(schema_cls):
-    """Validate request JSON through a Pydantic schema."""
-    global _LAST_VALIDATION_ERROR
-
+    No global state — safe under multi-threaded WSGI servers.
+    """
     raw = request.get_json(silent=True)
     if not raw:
-        _LAST_VALIDATION_ERROR = "Request body must be JSON."
-        return None
+        return None, "Request body must be JSON."
 
     try:
-        _LAST_VALIDATION_ERROR = None
-        return schema_cls.model_validate(raw)
+        return schema_cls.model_validate(raw), None
     except ValidationError as exc:
-        _LAST_VALIDATION_ERROR = "; ".join(
+        msg = "; ".join(
             f"{'.'.join(str(loc) for loc in item['loc'])}: {item['msg']}"
             for item in exc.errors()
         )
-        return None
+        return None, msg
 
 
-def _validation_error_response():
-    """Return the most recent request validation error."""
-    message = _LAST_VALIDATION_ERROR or "Validation error."
+def _validation_error_response(message: str):
+    """Return a validation error response for the given message."""
     status = 400 if message == "Request body must be JSON." else 422
     return jsonify(error(message)), status
