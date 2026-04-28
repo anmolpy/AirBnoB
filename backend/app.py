@@ -1,3 +1,21 @@
+"""
+AirBnoB — Flask Application Factory
+=====================================
+backend/app.py
+
+Usage:
+    # Development
+    flask --app app run --debug
+
+    # Production (Gunicorn)
+    gunicorn "app:create_app('production')" -w 4 -b 0.0.0.0:5000
+
+Environment variables required in production:
+    FLASK_ENV=production
+    JWT_SECRET_KEY=<strong-random-secret>
+    DATABASE_URL=postgresql+psycopg://user:pass@host:5432/airbnob
+"""
+
 from __future__ import annotations
 
 import os
@@ -24,7 +42,16 @@ limiter = Limiter(
 
 # Application factory
 def create_app(config_name: str | None = None) -> Flask:
-   
+    """
+    Create and configure a Flask application instance.
+
+    Args:
+        config_name: 'development' | 'production' | 'testing'
+                     Falls back to FLASK_ENV env var, then 'development'.
+
+    Returns:
+        A fully configured Flask app.
+    """
     app = Flask(__name__)
 
     # Load config
@@ -50,6 +77,9 @@ def create_app(config_name: str | None = None) -> Flask:
     with app.app_context():
         if app.config.get("CREATE_TABLES_ON_STARTUP", False):
             db.create_all()
+
+    # Register CLI commands
+    register_commands(app)
 
     return app
 
@@ -193,3 +223,65 @@ def _register_error_handlers(app: Flask) -> None:
 if __name__ == "__main__":
     app = create_app("development")
     app.run(port=5000)
+
+
+# Flask CLI commands
+def register_commands(app: Flask) -> None:
+    """Register custom Flask CLI commands."""
+
+    import click
+
+    @app.cli.command("auto-checkout")
+    def auto_checkout():
+        """
+        Check out all active reservations whose check_out date has passed.
+
+        Run this on a schedule (e.g. nightly via Windows Task Scheduler or cron):
+
+            Windows:  flask --app app auto-checkout
+            Cron:     0 1 * * * cd /path/to/backend && flask --app app auto-checkout
+        """
+        from datetime import date
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+        from models.reservation import Reservation, ReservationStatus
+
+        today = date.today()
+        checked_out_count = 0
+        error_count = 0
+
+        with app.app_context():
+            stmt = (
+                select(Reservation)
+                .options(selectinload(Reservation.guest))
+                .where(
+                    Reservation.status == ReservationStatus.ACTIVE,
+                    Reservation.check_out < today,
+                )
+            )
+            overdue = db.session.scalars(stmt).all()
+
+            if not overdue:
+                click.echo(f"[{today}] No overdue active reservations found.")
+                return
+
+            click.echo(f"[{today}] Found {len(overdue)} overdue reservation(s). Processing...")
+
+            for reservation in overdue:
+                try:
+                    reservation.check_out_guest(db.session)
+                    checked_out_count += 1
+                    click.echo(
+                        f"  ✓ Checked out reservation #{reservation.id} "
+                        f"(room {reservation.room_id}, was due {reservation.check_out})"
+                    )
+                except Exception as exc:
+                    error_count += 1
+                    click.echo(
+                        f"  ✗ Failed reservation #{reservation.id}: {exc}",
+                        err=True,
+                    )
+
+        click.echo(
+            f"[{today}] Done. {checked_out_count} checked out, {error_count} errors."
+        )

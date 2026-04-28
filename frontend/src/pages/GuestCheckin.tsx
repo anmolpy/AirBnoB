@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import { guestAuthApi, isApiError, type GuestSession, type Reservation } from "../api";
 
@@ -61,13 +61,10 @@ function statusTone(status: Reservation["status"]): CSSProperties {
 }
 
 export default function GuestCheckin({ onNavigate }: GuestCheckinProps) {
-  const [token, setToken] = useState("");
   const [state, setState] = useState<GuestState>(EMPTY_GUEST_STATE);
   const [isHydrating, setIsHydrating] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const isAuthenticated = state.session !== null;
 
@@ -77,20 +74,17 @@ export default function GuestCheckin({ onNavigate }: GuestCheckinProps) {
       const reservation = await guestAuthApi.reservation();
 
       setState({ session, reservation });
-      setSuccessMessage("Guest session restored.");
       setError(null);
     } catch (caughtError) {
       const apiError = isApiError(caughtError) ? caughtError : null;
 
       if (apiError?.status === 401 || apiError?.status === 403) {
         setState(EMPTY_GUEST_STATE);
-        setSuccessMessage(null);
         setError(null);
         return;
       }
 
       setState(EMPTY_GUEST_STATE);
-      setSuccessMessage(null);
       setError(friendlyError(caughtError, "We could not load your guest session."));
     }
   }
@@ -124,27 +118,6 @@ export default function GuestCheckin({ onNavigate }: GuestCheckinProps) {
     return `${formatDate(state.session.check_in)} - ${formatDate(state.session.check_out)}`;
   }, [state.session]);
 
-  async function handleVerify(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
-    setSuccessMessage(null);
-
-    try {
-      const session = await guestAuthApi.verify({ token: token.trim() });
-      const reservation = await guestAuthApi.reservation();
-
-      setState({ session, reservation });
-      setToken("");
-      setSuccessMessage("Token verified. Your guest session is ready.");
-    } catch (caughtError) {
-      setState(EMPTY_GUEST_STATE);
-      setError(friendlyError(caughtError, "We could not verify that token."));
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   async function handleLogout() {
     setIsLoggingOut(true);
 
@@ -152,7 +125,6 @@ export default function GuestCheckin({ onNavigate }: GuestCheckinProps) {
       await guestAuthApi.logout();
     } finally {
       setState(EMPTY_GUEST_STATE);
-      setSuccessMessage(null);
       setError(null);
       setIsLoggingOut(false);
     }
@@ -167,36 +139,16 @@ export default function GuestCheckin({ onNavigate }: GuestCheckinProps) {
       <section style={styles.heroCard}>
         <header style={styles.header}>
           <p style={styles.eyebrow}>AirBnoB Guest Access</p>
-          <h1 style={styles.title}>Check in with your QR token</h1>
+          <h1 style={styles.title}>Your stay summary</h1>
           <p style={styles.subtitle}>
-            Guests do not create accounts. Verify your token to open your room summary and stay details.
+            Check-in is handled by front desk staff. Your stay details are shown below once your session is active.
           </p>
         </header>
-
-        <form onSubmit={handleVerify} style={styles.form}>
-          <label style={styles.field}>
-            <span style={styles.label}>QR / access token</span>
-            <input
-              autoComplete="off"
-              name="token"
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-              placeholder="123e4567-e89b-42d3-a456-426614174000"
-              style={styles.input}
-            />
-          </label>
-
-          <button type="submit" disabled={isSubmitting || token.trim().length === 0} style={styles.button}>
-            {isSubmitting ? "Verifying…" : "Verify token"}
-          </button>
-        </form>
-
-        {(error || successMessage) && (
+        {error ? (
           <div style={styles.messageStack}>
-            {error ? <p style={styles.errorMessage}>{error}</p> : null}
-            {successMessage ? <p style={styles.successMessage}>{successMessage}</p> : null}
+            <p style={styles.errorMessage}>{error}</p>
           </div>
-        )}
+        ) : null}
       </section>
 
       <section style={styles.detailGrid}>
@@ -220,7 +172,7 @@ export default function GuestCheckin({ onNavigate }: GuestCheckinProps) {
             </dl>
           ) : (
             <p style={styles.mutedText}>
-              Enter the token from your QR code to load your room and stay window.
+              Your room and stay details will appear here once staff have checked you in.
             </p>
           )}
 
