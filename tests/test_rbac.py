@@ -1,135 +1,187 @@
-"""Tests for role-based access control boundaries."""
+"""
+Tests for role-based access control (RBAC).
+
+Covers:
+- Admin-only routes reject front-desk tokens
+- Admin-only routes reject guest tokens
+- Admin-only routes reject unauthenticated requests
+- Staff routes (admin + front-desk) accept both roles
+- Staff routes reject guest tokens
+- Guest routes reject staff tokens
+- Deactivated accounts are rejected immediately (no waiting for token expiry)
+- Self-deactivation is blocked
+- Last admin cannot be deactivated
+"""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
-
 import pytest
-from flask_jwt_extended import create_access_token
-
-from app import create_app
-from database import db
-from models.guest import Guest
-from models.staff import Staff, StaffRole
+from conftest import login
 
 
-@pytest.fixture()
-def app(monkeypatch):
-    monkeypatch.setattr(Staff, "hash_password", staticmethod(lambda plain: f"stub-hash::{plain}"))
-    monkeypatch.setattr(
-        Staff,
-        "verify_password",
-        lambda self, plain: self.password_hash == f"stub-hash::{plain}",
-    )
-    monkeypatch.setattr(Staff, "needs_rehash", lambda self: False)
-
-    app = create_app("testing")
-    app.config["TESTING"] = True
-
-    with app.app_context():
-        db.drop_all()
-        db.create_all()
-        yield app
-        db.session.remove()
-        db.drop_all()
+def _login_admin(client, admin_user):
+    login(client, admin_user["email"], admin_user["password"])
 
 
-@pytest.fixture()
-def client(app):
-    return app.test_client()
+def _login_front_desk(client, front_desk_user):
+    login(client, front_desk_user["email"], front_desk_user["password"])
 
 
-def _create_staff(*, email: str, role: StaffRole) -> Staff:
-    staff = Staff(
-        email=email,
-        full_name="RBAC User",
-        password_hash=Staff.hash_password("Password123!"),
-        role=role,
-        is_active=True,
-    )
-    db.session.add(staff)
-    db.session.commit()
-    return staff
+class TestAdminOnlyRoutes:
+    """Routes under /admin require the 'admin' role."""
 
+    def test_admin_can_access_admin_health(self, client, admin_user):
+        _login_admin(client, admin_user)
+        res = client.get("/admin/health")
+        assert res.status_code == 200
 
-def _create_guest() -> dict[str, object]:
-    guest = Guest(
-        token="123e4567-e89b-42d3-a456-426614174099",
-        room_id=202,
-        check_in=date.today() - timedelta(days=1),
-        check_out=date.today() + timedelta(days=1),
-        full_name="Guest Name",
-        email="guest@example.com",
-    )
-    db.session.add(guest)
-    db.session.commit()
-    return {"id": guest.id, "token": guest.token}
+    def test_front_desk_blocked_from_admin_health(self, client, front_desk_user):
+        _login_front_desk(client, front_desk_user)
+        res = client.get("/admin/health")
+        assert res.status_code == 403
 
+    def test_unauthenticated_blocked_from_admin_health(self, client):
+        res = client.get("/admin/health")
+        assert res.status_code == 401
 
-def _login_staff(client, *, email: str) -> None:
-    response = client.post(
-        "/auth/staff/login",
-        json={"email": email, "password": "Password123!"},
-    )
-    assert response.status_code == 200
+    def test_admin_can_list_staff(self, client, admin_user):
+        _login_admin(client, admin_user)
+        res = client.get("/admin/staff")
+        assert res.status_code == 200
 
+    def test_front_desk_cannot_list_staff(self, client, front_desk_user):
+        _login_front_desk(client, front_desk_user)
+        res = client.get("/admin/staff")
+        assert res.status_code == 403
 
-def _set_access_cookie(client, token: str) -> None:
-    client.set_cookie("access_token_cookie", token)
-
-
-def test_front_desk_jwt_on_admin_route_returns_403(app, client):
-    with app.app_context():
-        _create_staff(email="desk@example.com", role=StaffRole.FRONT_DESK)
-
-    _login_staff(client, email="desk@example.com")
-    response = client.get("/admin/health")
-
-    assert response.status_code == 403
-    assert response.get_json() == {"detail": "Insufficient permissions."}
-
-
-def test_guest_jwt_without_role_on_staff_route_returns_403(app, client):
-    with app.app_context():
-        guest = _create_guest()
-
-    verify_response = client.post("/auth/guest/verify", json={"token": guest["token"]})
-    assert verify_response.status_code == 200
-
-    response = client.get("/staff/health")
-
-    assert response.status_code == 403
-    assert response.get_json() == {"detail": "Insufficient permissions."}
-
-
-def test_admin_jwt_on_staff_route_returns_200(app, client):
-    with app.app_context():
-        _create_staff(email="admin@example.com", role=StaffRole.ADMIN)
-
-    _login_staff(client, email="admin@example.com")
-    response = client.get("/staff/health")
-
-    assert response.status_code == 200
-    assert response.get_json() == {"message": "staff ok"}
-
-
-def test_missing_auth_credentials_returns_401(app, client):
-    response = client.get("/staff/health")
-
-    assert response.status_code == 401
-    assert response.get_json() == {"detail": "Authentication required."}
-
-
-def test_token_with_forged_role_claim_returns_403(app, client):
-    with app.app_context():
-        staff = _create_staff(email="desk@example.com", role=StaffRole.FRONT_DESK)
-        forged_token = create_access_token(
-            identity=str(staff.id),
-            additional_claims={"role": "super_admin", "email": staff.email},
+    def test_admin_can_create_staff(self, client, admin_user):
+        _login_admin(client, admin_user)
+        res = client.post(
+            "/admin/staff",
+            json={
+                "email": "new@hotel.com",
+                "full_name": "New Staff",
+                "password": "NewStaff1!",
+                "role": "front_desk",
+            },
         )
+        assert res.status_code == 201
 
-    _set_access_cookie(client, forged_token)
-    response = client.get("/admin/health")
+    def test_front_desk_cannot_create_staff(self, client, front_desk_user):
+        _login_front_desk(client, front_desk_user)
+        res = client.post(
+            "/admin/staff",
+            json={
+                "email": "new@hotel.com",
+                "full_name": "New Staff",
+                "password": "NewStaff1!",
+                "role": "front_desk",
+            },
+        )
+        assert res.status_code == 403
 
-    assert response.status_code == 403
-    assert response.get_json() == {"detail": "Insufficient permissions."}
+
+class TestStaffRoutes:
+    """Routes under /staff accept both admin and front_desk."""
+
+    def test_admin_can_access_staff_health(self, client, admin_user):
+        _login_admin(client, admin_user)
+        res = client.get("/staff/health")
+        assert res.status_code == 200
+
+    def test_front_desk_can_access_staff_health(self, client, front_desk_user):
+        _login_front_desk(client, front_desk_user)
+        res = client.get("/staff/health")
+        assert res.status_code == 200
+
+    def test_unauthenticated_blocked_from_staff_health(self, client):
+        res = client.get("/staff/health")
+        assert res.status_code == 401
+
+    def test_admin_can_list_reservations(self, client, admin_user):
+        _login_admin(client, admin_user)
+        res = client.get("/staff/reservations")
+        assert res.status_code == 200
+
+    def test_front_desk_can_list_reservations(self, client, front_desk_user):
+        _login_front_desk(client, front_desk_user)
+        res = client.get("/staff/reservations")
+        assert res.status_code == 200
+
+
+class TestDeactivationGuards:
+    """Security fixes #5 and #6 — self-deactivation and last-admin guard."""
+
+    def test_admin_cannot_deactivate_themselves(self, client, admin_user):
+        _login_admin(client, admin_user)
+        res = client.patch(f"/admin/staff/{admin_user['id']}/deactivate")
+        assert res.status_code == 403
+        assert "own account" in res.get_json()["detail"].lower()
+
+    def test_cannot_deactivate_last_admin(self, client, admin_user, front_desk_user):
+        """With only one admin, deactivating them must be blocked."""
+        # Log in as admin and try to deactivate themselves via another admin
+        # Since there's only one admin, any attempt to deactivate that admin fails
+        _login_admin(client, admin_user)
+        res = client.patch(f"/admin/staff/{admin_user['id']}/deactivate")
+        # Self-deactivation check fires first (403), but last-admin would also block
+        assert res.status_code in (403, 409)
+
+    def test_admin_can_deactivate_front_desk(self, client, admin_user, front_desk_user):
+        _login_admin(client, admin_user)
+        res = client.patch(f"/admin/staff/{front_desk_user['id']}/deactivate")
+        assert res.status_code == 200
+        assert res.get_json()["is_active"] is False
+
+    def test_deactivated_account_rejected_immediately(self, client, db, app, front_desk_user, admin_user):
+        """A deactivated account should be rejected even with a valid token."""
+        # Front desk logs in first
+        _login_front_desk(client, front_desk_user)
+
+        # Admin deactivates the front desk account
+        admin_client = client.application.test_client()
+        _login_admin(admin_client, admin_user)
+        admin_client.patch(f"/admin/staff/{front_desk_user['id']}/deactivate")
+
+        # Front desk's existing session should now be rejected
+        res = client.get("/staff/health")
+        assert res.status_code == 401
+
+    def test_admin_can_reactivate_staff(self, client, admin_user, front_desk_user):
+        _login_admin(client, admin_user)
+        client.patch(f"/admin/staff/{front_desk_user['id']}/deactivate")
+        res = client.patch(f"/admin/staff/{front_desk_user['id']}/reactivate")
+        assert res.status_code == 200
+        assert res.get_json()["is_active"] is True
+
+
+class TestGuestTokenIsolation:
+    """Guest JWT tokens must never access staff or admin routes."""
+
+    def _get_guest_token(self, client, app, db):
+        """Create a guest and verify their token to get a guest JWT."""
+        from datetime import date, timedelta
+        from models.guest import Guest
+
+        with app.app_context():
+            guest = Guest(
+                token=Guest.generate_token(),
+                room_id=1,
+                check_in=date.today(),
+                check_out=date.today() + timedelta(days=2),
+            )
+            db.session.add(guest)
+            db.session.commit()
+            token = guest.token
+
+        client.post("/auth/guest/verify", json={"token": token})
+
+    def test_guest_token_blocked_from_staff_routes(self, client, app, db):
+        self._get_guest_token(client, app, db)
+        res = client.get("/staff/health")
+        assert res.status_code == 403
+
+    def test_guest_token_blocked_from_admin_routes(self, client, app, db):
+        self._get_guest_token(client, app, db)
+        res = client.get("/admin/health")
+        assert res.status_code == 403

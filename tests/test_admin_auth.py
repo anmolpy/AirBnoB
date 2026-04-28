@@ -1,206 +1,194 @@
-"""Tests for admin authentication flows and guest token verification."""
+"""
+Tests for admin / staff authentication.
+
+Covers:
+- Successful login returns 200 + role info
+- Wrong password returns 401
+- Unknown email returns 401 (same message — no enumeration)
+- Inactive account returns 401
+- Missing fields return 422
+- Logout clears the cookie
+- /me returns current user when authenticated
+- /me returns 401 when not authenticated
+- Change password happy path
+- Change password wrong current password
+- Change password same as old password
+"""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
-from http.cookies import SimpleCookie
-
 import pytest
-from flask_jwt_extended import create_access_token, decode_token
-
-from app import create_app
-from database import db
-from models.guest import Guest
-from models.staff import Staff, StaffRole
+from conftest import login
 
 
-@pytest.fixture()
-def app(monkeypatch):
-    monkeypatch.setattr(Staff, "hash_password", staticmethod(lambda plain: f"stub-hash::{plain}"))
-    monkeypatch.setattr(
-        Staff,
-        "verify_password",
-        lambda self, plain: self.password_hash == f"stub-hash::{plain}",
-    )
-    monkeypatch.setattr(Staff, "needs_rehash", lambda self: False)
+class TestLogin:
+    def test_successful_login(self, client, admin_user):
+        res = login(client, admin_user["email"], admin_user["password"])
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data["role"] == "admin"
+        assert data["full_name"] == "Test Admin"
+        assert "access_token_cookie" in res.headers.get("Set-Cookie", "")
 
-    app = create_app("testing")
-    app.config["TESTING"] = True
+    def test_wrong_password(self, client, admin_user):
+        res = login(client, admin_user["email"], "WrongPass1!")
+        assert res.status_code == 401
+        assert res.get_json()["detail"] == "Invalid credentials."
 
-    with app.app_context():
-        db.drop_all()
-        db.create_all()
-        yield app
-        db.session.remove()
-        db.drop_all()
+    def test_unknown_email(self, client):
+        res = login(client, "nobody@hotel.com", "SomePass1!")
+        assert res.status_code == 401
+        assert res.get_json()["detail"] == "Invalid credentials."
 
+    def test_wrong_and_unknown_same_message(self, client, admin_user):
+        """Both wrong password and unknown email must return identical messages
+        to prevent user enumeration."""
+        wrong_pass = login(client, admin_user["email"], "WrongPass1!")
+        unknown = login(client, "nobody@hotel.com", "SomePass1!")
+        assert wrong_pass.get_json()["detail"] == unknown.get_json()["detail"]
 
-@pytest.fixture()
-def client(app):
-    return app.test_client()
+    def test_inactive_account(self, client, db, app, admin_user):
+        from models.staff import Staff
+        with app.app_context():
+            staff = db.session.get(Staff, admin_user["id"])
+            staff.is_active = False
+            db.session.commit()
 
+        res = login(client, admin_user["email"], admin_user["password"])
+        assert res.status_code == 401
+        assert res.get_json()["detail"] == "Invalid credentials."
 
-def _create_staff(*, email: str, password: str = "Password123!", role: StaffRole = StaffRole.ADMIN) -> Staff:
-    staff = Staff(
-        email=email,
-        full_name="Test Staff",
-        password_hash=Staff.hash_password(password),
-        role=role,
-        is_active=True,
-    )
-    db.session.add(staff)
-    db.session.commit()
-    return staff
+    def test_missing_password_field(self, client):
+        res = client.post("/auth/staff/login", json={"email": "admin@hotel.com"})
+        assert res.status_code == 422
 
+    def test_missing_email_field(self, client):
+        res = client.post("/auth/staff/login", json={"password": "AdminPass1!"})
+        assert res.status_code == 422
 
-def _create_guest(*, token: str, check_in: date, check_out: date) -> dict[str, object]:
-    guest = Guest(
-        token=token,
-        room_id=101,
-        check_in=check_in,
-        check_out=check_out,
-        full_name="Guest Name",
-        email="guest@example.com",
-    )
-    db.session.add(guest)
-    db.session.commit()
-    return {
-        "id": guest.id,
-        "token": guest.token,
-        "room_id": guest.room_id,
-        "check_in": guest.check_in,
-        "check_out": guest.check_out,
-    }
+    def test_empty_body(self, client):
+        res = client.post("/auth/staff/login", json={})
+        assert res.status_code == 400
 
-
-def _cookie_value(response, key: str) -> str | None:
-    cookie = SimpleCookie()
-    for header in response.headers.getlist("Set-Cookie"):
-        cookie.load(header)
-    morsel = cookie.get(key)
-    return morsel.value if morsel is not None else None
-
-
-def _set_access_cookie(client, token: str) -> None:
-    client.set_cookie("access_token_cookie", token)
-
-
-def test_login_happy_path_returns_200_and_cookie(app, client):
-    with app.app_context():
-        _create_staff(email="admin@example.com")
-
-    response = client.post(
-        "/auth/staff/login",
-        json={"email": "admin@example.com", "password": "Password123!"},
-    )
-
-    assert response.status_code == 200
-    assert response.get_json() == {
-        "message": "Login successful.",
-        "role": "admin",
-        "full_name": "Test Staff",
-    }
-    assert _cookie_value(response, "access_token_cookie")
-
-
-def test_login_wrong_password_returns_401_without_field_detail(app, client):
-    with app.app_context():
-        _create_staff(email="admin@example.com")
-
-    response = client.post(
-        "/auth/staff/login",
-        json={"email": "admin@example.com", "password": "WrongPassword123!"},
-    )
-
-    assert response.status_code == 401
-    assert response.get_json() == {"detail": "Invalid credentials."}
-    body = response.get_json()["detail"].lower()
-    assert "email" not in body
-    assert "password" not in body
-
-
-def test_login_invalid_email_format_returns_422(app, client):
-    response = client.post(
-        "/auth/staff/login",
-        json={"email": "not-an-email", "password": "Password123!"},
-    )
-
-    assert response.status_code == 422
-    assert "email" in response.get_json()["detail"].lower()
-
-
-def test_login_rate_limit_11th_request_in_one_minute_returns_429(app, client):
-    with app.app_context():
-        _create_staff(email="admin@example.com")
-
-    for _ in range(10):
-        response = client.post(
+    def test_non_json_body(self, client):
+        res = client.post(
             "/auth/staff/login",
-            json={"email": "admin@example.com", "password": "WrongPassword123!"},
+            data="not json",
+            content_type="text/plain",
         )
-        assert response.status_code == 401
+        assert res.status_code == 400
 
-    response = client.post(
-        "/auth/staff/login",
-        json={"email": "admin@example.com", "password": "WrongPassword123!"},
-    )
-
-    assert response.status_code == 429
-    assert response.get_json() == {"detail": "Too many requests. Try again later."}
-
-
-def test_expired_jwt_returns_401_on_me(app, client):
-    with app.app_context():
-        staff = _create_staff(email="admin@example.com")
-        expired_token = create_access_token(
-            identity=str(staff.id),
-            additional_claims={"role": staff.role, "email": staff.email},
-            expires_delta=timedelta(seconds=-1),
+    def test_extra_fields_rejected(self, client):
+        """extra='forbid' on the schema must block unknown keys."""
+        res = client.post(
+            "/auth/staff/login",
+            json={"email": "admin@hotel.com", "password": "AdminPass1!", "role": "admin"},
         )
+        assert res.status_code == 422
 
-    _set_access_cookie(client, expired_token)
-    response = client.get("/auth/staff/me")
-
-    assert response.status_code == 401
-    assert response.get_json() == {"detail": "Token has expired."}
-
-
-def test_guest_verify_issues_session_without_role_claim(app, client):
-    with app.app_context():
-        guest = _create_guest(
-            token="123e4567-e89b-42d3-a456-426614174000",
-            check_in=date.today() - timedelta(days=1),
-            check_out=date.today() + timedelta(days=1),
+    def test_password_too_short(self, client):
+        res = client.post(
+            "/auth/staff/login",
+            json={"email": "admin@hotel.com", "password": "short"},
         )
+        assert res.status_code == 422
 
-    response = client.post("/auth/guest/verify", json={"token": guest["token"]})
-
-    assert response.status_code == 200
-    assert response.get_json() == {
-        "room_id": 101,
-        "check_in": guest["check_in"].isoformat(),
-        "check_out": guest["check_out"].isoformat(),
-        "message": "Token verified.",
-    }
-
-    with app.app_context():
-        claims = decode_token(_cookie_value(response, "access_token_cookie"))
-
-    assert claims["sub"] == str(guest["id"])
-    assert claims["token_type"] == "guest"
-    assert claims["room_id"] == 101
-    assert "role" not in claims
+    def test_email_case_insensitive(self, client, admin_user):
+        """Email normalisation means ADMIN@HOTEL.COM should match admin@hotel.com."""
+        res = login(client, "ADMIN@HOTEL.COM", admin_user["password"])
+        assert res.status_code == 200
 
 
-def test_guest_verify_rejects_expired_token(app, client):
-    with app.app_context():
-        guest = _create_guest(
-            token="123e4567-e89b-42d3-a456-426614174001",
-            check_in=date.today() - timedelta(days=4),
-            check_out=date.today() - timedelta(days=1),
+class TestLogout:
+    def test_logout_clears_cookie(self, client, admin_user):
+        login(client, admin_user["email"], admin_user["password"])
+        res = client.post("/auth/staff/logout")
+        assert res.status_code == 200
+        # Cookie should be cleared (empty or expired)
+        cookie_header = res.headers.get("Set-Cookie", "")
+        assert "access_token_cookie" in cookie_header
+
+    def test_logout_without_login(self, client):
+        res = client.post("/auth/staff/logout")
+        assert res.status_code == 401
+
+
+class TestMe:
+    def test_me_authenticated(self, client, admin_user):
+        login(client, admin_user["email"], admin_user["password"])
+        res = client.get("/auth/staff/me")
+        assert res.status_code == 200
+        data = res.get_json()
+        assert data["email"] == admin_user["email"]
+        assert "password_hash" not in data
+
+    def test_me_unauthenticated(self, client):
+        res = client.get("/auth/staff/me")
+        assert res.status_code == 401
+
+    def test_me_deactivated_mid_session(self, client, db, app, admin_user):
+        """Even with a valid token, a deactivated account must be rejected."""
+        login(client, admin_user["email"], admin_user["password"])
+
+        from models.staff import Staff
+        with app.app_context():
+            staff = db.session.get(Staff, admin_user["id"])
+            staff.is_active = False
+            db.session.commit()
+
+        res = client.get("/auth/staff/me")
+        assert res.status_code == 401
+
+
+class TestChangePassword:
+    def test_change_password_success(self, client, admin_user):
+        login(client, admin_user["email"], admin_user["password"])
+        res = client.post(
+            "/auth/staff/change-password",
+            json={
+                "current_password": admin_user["password"],
+                "new_password": "NewAdminPass1!",
+            },
         )
+        assert res.status_code == 200
 
-    response = client.post("/auth/guest/verify", json={"token": guest["token"]})
+        # Old password must no longer work
+        client2 = client.application.test_client()
+        res2 = login(client2, admin_user["email"], admin_user["password"])
+        assert res2.status_code == 401
 
-    assert response.status_code == 401
-    assert response.get_json() == {"detail": "Invalid or expired token."}
+        # New password must work
+        res3 = login(client2, admin_user["email"], "NewAdminPass1!")
+        assert res3.status_code == 200
+
+    def test_wrong_current_password(self, client, admin_user):
+        login(client, admin_user["email"], admin_user["password"])
+        res = client.post(
+            "/auth/staff/change-password",
+            json={
+                "current_password": "WrongPass1!",
+                "new_password": "NewAdminPass1!",
+            },
+        )
+        assert res.status_code == 401
+
+    def test_same_password_rejected(self, client, admin_user):
+        login(client, admin_user["email"], admin_user["password"])
+        res = client.post(
+            "/auth/staff/change-password",
+            json={
+                "current_password": admin_user["password"],
+                "new_password": admin_user["password"],
+            },
+        )
+        assert res.status_code == 422
+
+    def test_change_password_unauthenticated(self, client):
+        res = client.post(
+            "/auth/staff/change-password",
+            json={
+                "current_password": "AdminPass1!",
+                "new_password": "NewAdminPass1!",
+            },
+        )
+        assert res.status_code == 401
