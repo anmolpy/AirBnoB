@@ -52,6 +52,26 @@ function friendlyError(error: unknown, fallback: string): string {
 }
 
 export default function GuestBooking({ onNavigate }: GuestBookingProps) {
+  const [copied, setCopied] = useState(false);
+
+  async function copyToken(token: string) {
+    try {
+      await navigator.clipboard.writeText(token);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback for older browsers
+      const el = document.createElement("textarea");
+      el.value = token;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
   const [form, setForm] = useState<BookingForm>(EMPTY_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -231,7 +251,17 @@ export default function GuestBooking({ onNavigate }: GuestBookingProps) {
               </div>
               <div style={styles.tokenBox}>
                 <span style={styles.confirmationLabel}>Guest token</span>
+                <div style={styles.tokenWarning}>
+                  ⚠️ <strong>Save this token — you will need it to view your booking status.</strong> It will not be shown again.
+                </div>
                 <code style={styles.tokenCode}>{success.guest_token}</code>
+                <button
+                  type="button"
+                  onClick={() => void copyToken(success.guest_token)}
+                  style={styles.copyButton}
+                >
+                  {copied ? "✓ Copied!" : "Copy token"}
+                </button>
               </div>
             </div>
           ) : (
@@ -438,6 +468,25 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: "8px",
     marginTop: "4px",
+  },
+  tokenWarning: {
+    padding: "12px 14px",
+    borderRadius: "12px",
+    background: "#fffbeb",
+    border: "1px solid #fcd34d",
+    color: "#92400e",
+    fontSize: "13px",
+    lineHeight: 1.5,
+  },
+  copyButton: {
+    minHeight: "40px",
+    borderRadius: "12px",
+    border: "1px solid #d1d5db",
+    background: "#f8fafc",
+    color: "#111827",
+    fontSize: "14px",
+    fontWeight: 700,
+    cursor: "pointer",
   },
   tokenCode: {
     display: "block",

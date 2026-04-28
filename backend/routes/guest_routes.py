@@ -78,7 +78,7 @@ def guest_me():
         return jsonify(error("Insufficient permissions.")), 403
 
     guest = _current_guest()
-    if guest is None or not guest.is_valid_token():
+    if guest is None or not guest.is_viewable_token():
         return jsonify(error("Guest session is no longer valid.")), 401
 
     return jsonify(
@@ -98,7 +98,7 @@ def guest_reservation():
         return jsonify(error("Insufficient permissions.")), 403
 
     guest = _current_guest()
-    if guest is None or not guest.is_valid_token():
+    if guest is None or not guest.is_viewable_token():
         return jsonify(error("Guest session is no longer valid.")), 401
 
     stmt = (
