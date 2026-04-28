@@ -422,16 +422,9 @@ export default function StaffDashboard({
     setQrCheckinSuccess(null);
 
     try {
-      // Find the reservation by looking up all pending reservations
-      // and matching via the guest token through the guest auth verify endpoint
-      const { guestAuthApi } = await import('../api');
-      const session = await guestAuthApi.verify({ token: qrToken.trim() });
-      const reservation = await guestAuthApi.reservation();
-
-      if (!reservation) {
-        setQrCheckinError('No reservation found for this token.');
-        return;
-      }
+      // Use the staff endpoint to look up the reservation by token.
+      // This keeps the staff JWT cookie intact — we never call the guest auth endpoint.
+      const reservation = await reservationsApi.getByToken(qrToken.trim());
 
       if (reservation.status !== 'pending') {
         setQrCheckinError(
@@ -444,12 +437,12 @@ export default function StaffDashboard({
 
       await reservationsApi.checkIn({ reservation_id: reservation.id });
       setQrCheckinSuccess(
-        `Guest checked in successfully. Room ${session.room_id}, Reservation #${reservation.id}.`
+        `Guest checked in. Room ${reservation.room_id}, Reservation #${reservation.id}.`
       );
       setQrToken('');
       await loadReservations(reservation.id);
     } catch (error) {
-      setQrCheckinError(friendlyError(error, 'We could not complete the check-in.'));
+      setQrCheckinError(friendlyError(error, 'Token not found or check-in failed.'));
     } finally {
       setQrCheckinLoading(false);
     }
