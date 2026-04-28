@@ -1,20 +1,4 @@
-"""
-AirBnoB — Flask Application Factory
-=====================================
-backend/app.py
 
-Usage:
-    # Development
-    flask --app app run --debug
-
-    # Production (Gunicorn)
-    gunicorn "app:create_app('production')" -w 4 -b 0.0.0.0:5000
-
-Environment variables required in production:
-    FLASK_ENV=production
-    JWT_SECRET_KEY=<strong-random-secret>
-    DATABASE_URL=postgresql+psycopg://user:pass@host:5432/airbnob
-"""
 
 from __future__ import annotations
 
@@ -42,16 +26,7 @@ limiter = Limiter(
 
 # Application factory
 def create_app(config_name: str | None = None) -> Flask:
-    """
-    Create and configure a Flask application instance.
-
-    Args:
-        config_name: 'development' | 'production' | 'testing'
-                     Falls back to FLASK_ENV env var, then 'development'.
-
-    Returns:
-        A fully configured Flask app.
-    """
+    
     app = Flask(__name__)
 
     # Load config
@@ -219,10 +194,7 @@ def _register_error_handlers(app: Flask) -> None:
         return jsonify(detail="Fresh token required for this action."), 401
 
 
-# Dev entry point
-if __name__ == "__main__":
-    app = create_app("development")
-    app.run(port=5000)
+# Dev entry point will be after CLI command registration
 
 
 # Flask CLI commands
@@ -233,14 +205,7 @@ def register_commands(app: Flask) -> None:
 
     @app.cli.command("auto-checkout")
     def auto_checkout():
-        """
-        Check out all active reservations whose check_out date has passed.
-
-        Run this on a schedule (e.g. nightly via Windows Task Scheduler or cron):
-
-            Windows:  flask --app app auto-checkout
-            Cron:     0 1 * * * cd /path/to/backend && flask --app app auto-checkout
-        """
+        
         from datetime import date
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
@@ -285,3 +250,9 @@ def register_commands(app: Flask) -> None:
         click.echo(
             f"[{today}] Done. {checked_out_count} checked out, {error_count} errors."
         )
+
+
+# Dev entry point
+if __name__ == "__main__":
+    app = create_app("development")
+    app.run(port=5000)

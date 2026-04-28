@@ -1,18 +1,3 @@
-"""
-AirBnoB — Guest Model
-======================
-backend/models/guest.py
-
-Guests never create accounts. A guest is identified only by a short-lived
-UUID token tied to a room and a date range. After check-out, PII is purged.
-
-Design principles from the proposal:
-- No password_hash column — guests have no credentials
-- No full name, address, or payment data stored beyond check-out
-- Token expires automatically based on check_out date
-- purge_pii() is called post-checkout to satisfy data minimization
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -26,20 +11,7 @@ from database import Base
 
 # Guest ORM model
 class Guest(Base):
-    """
-    Maps to the 'guests' table in PostgreSQL.
-
-    A row is created at check-in and purged of PII at check-out.
-    The token column is the only persistent identifier — it is embedded
-    in the QR code handed to the guest at front desk.
-
-    Columns intentionally absent:
-        - password_hash  (guests have no login)
-        - full_name      (purged post-checkout)
-        - email          (purged post-checkout)
-        - payment_data   (never stored — out of scope per proposal)
-        - address        (never stored)
-    """
+ 
 
     __tablename__ = "guests"
 
@@ -102,18 +74,7 @@ class Guest(Base):
     # PII helpers
 
     def purge_pii(self, session: Session) -> None:
-        """
-        Erase guest PII and mark the record as checked out.
-
-        Mutates state only — does NOT commit. The caller (check_out_guest)
-        is responsible for the commit so that the reservation status update
-        and the PII purge land in the same transaction with no gap between
-        them where status is CHECKED_OUT but PII still exists.
-
-        What is erased:   full_name, email
-        What is retained: token, room_id, check_in, check_out, timestamps
-                          (needed for audit trail and billing reconciliation)
-        """
+        
         self.full_name      = None
         self.email          = None
         self.checked_out_at = datetime.now(tz=timezone.utc)
@@ -123,32 +84,13 @@ class Guest(Base):
 
     @classmethod
     def get_by_token(cls, session: Session, token: str) -> Guest | None:
-        """
-        Look up a guest by their QR token.
-        Returns None if the token does not exist.
-
-        Usage in guest_auth.py:
-            guest = Guest.get_by_token(session, body.token)
-            if guest is None or not guest.is_valid_token():
-                return _error("Invalid or expired token.", 401)
-        """
+        
         stmt = select(cls).where(cls.token == token)
         return session.scalars(stmt).first()
 
     @classmethod
     def purge_expired(cls, session: Session) -> int:
-        """
-        Bulk-purge PII from all guests whose stay ended before today
-        and who have not yet been cleaned up.
-
-        Run this nightly via a cron job or Flask CLI command to ensure
-        no stale PII lingers past checkout date.
-
-        Note: mutates fields directly rather than calling purge_pii() so
-        that a single session.commit() covers all rows in one transaction.
-
-        Returns the number of records cleaned.
-        """
+        
         today = date.today()
         stmt = select(cls).where(
             cls.check_out < today,

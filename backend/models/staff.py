@@ -1,12 +1,3 @@
-"""
-AirBnoB — Staff Model
-======================
-backend/models/staff.py
-
-Represents hotel admin and front-desk employees.
-Guests are NOT stored here — they use ephemeral tokens (see guest.py).
-"""
-
 from __future__ import annotations
 
 import re
@@ -30,28 +21,14 @@ def _parse_bcrypt_rounds(hash_value: str) -> int | None:
 
 # Role enum
 class StaffRole(StrEnum):
-    """
-    Two-tier role system per the proposal's access control design.
-
-    ADMIN      — full access: pricing, billing, user management, all staff routes
-    FRONT_DESK — operational access: reservations, check-in, check-out only
-    """
+   
     ADMIN      = "admin"
     FRONT_DESK = "front_desk"
 
 
 # Staff ORM model
 class Staff(Base):
-    """
-    Maps to the 'staff' table in PostgreSQL.
-
-    Design decisions:
-    - password_hash stores bcrypt digest only — plaintext never persists
-    - role column is constrained to StaffRole values via String length + app logic
-    - email is normalised to lowercase before storage (enforced in Pydantic schema)
-    - No address, phone, or other PII columns — minimal data per proposal
-    """
-
+  
     __tablename__ = "staff"
 
     __table_args__ = (
@@ -96,40 +73,19 @@ class Staff(Base):
 
     @staticmethod
     def hash_password(plain: str) -> str:
-        """
-        Hash a plaintext password with bcrypt (cost 12).
-        Call this when creating or updating a staff account — never store plain.
-
-        Example:
-            staff.password_hash = Staff.hash_password("SecurePass123!")
-        """
+     
         salt = bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)
         return bcrypt.hashpw(plain.encode("utf-8"), salt).decode("utf-8")
 
     def verify_password(self, plain: str) -> bool:
-        """
-        Constant-time bcrypt comparison.
-        Returns True if plain matches the stored hash, False otherwise.
-
-        Note: call pwd_ctx.dummy_verify() on a login miss BEFORE calling this
-        so that timing is uniform whether or not the account exists.
-        (Handled in admin_auth.py, not here.)
-        """
+        
         try:
             return bcrypt.checkpw(plain.encode("utf-8"), self.password_hash.encode("utf-8"))
         except ValueError:
             return False
 
     def needs_rehash(self) -> bool:
-        """
-        Returns True if the stored hash was made with fewer than the current
-        bcrypt rounds. Use this to transparently upgrade hashes on next login.
-
-        Example in admin_auth.py:
-            if staff.needs_rehash():
-                staff.password_hash = Staff.hash_password(plain)
-                session.commit()
-        """
+        
         rounds = _parse_bcrypt_rounds(self.password_hash)
         return rounds is None or rounds < _BCRYPT_ROUNDS
 

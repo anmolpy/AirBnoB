@@ -1,17 +1,3 @@
-"""
-AirBnoB — Reservation Model
-=============================
-backend/models/reservation.py
-
-Links a guest token to a room and a date range.
-A reservation is created by front desk at booking time and transitions
-through three states: pending → active → checked_out.
-
-No PII beyond what is strictly required to manage the booking is stored here.
-Guest identity is referenced via guest_id FK — personal details live (briefly)
-on the Guest row and are purged at checkout.
-"""
-
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
@@ -19,20 +5,13 @@ from enum import StrEnum
 
 from sqlalchemy import Date, DateTime, ForeignKey, String, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm import scoped_session
 
 from database import Base
 
 
 # Status enum
 class ReservationStatus(StrEnum):
-    """
-    Lifecycle states of a reservation.
-
-    PENDING     — booked but guest has not yet arrived
-    ACTIVE      — guest has checked in, QR token is live
-    CHECKED_OUT — stay complete, guest PII has been purged
-    CANCELLED   — reservation cancelled before check-in
-    """
     PENDING     = "pending"
     ACTIVE      = "active"
     CHECKED_OUT = "checked_out"
@@ -41,15 +20,7 @@ class ReservationStatus(StrEnum):
 
 # Reservation ORM model
 class Reservation(Base):
-    """
-    Maps to the 'reservations' table in PostgreSQL.
-
-    Design decisions:
-    - guest_id FK links to guests.id — no name/email duplicated here
-    - room_id is a plain integer (Room model lives in Sushil's schema work)
-    - status drives the checkout flow and determines token validity
-    - No payment data stored — out of scope per proposal
-    """
+    
 
     __tablename__ = "reservations"
 
@@ -107,17 +78,8 @@ class Reservation(Base):
 
     # State transition helpers
 
-    def check_in_guest(self, session: Session) -> None:
-        """
-        Transition: PENDING → ACTIVE.
-
-        Called by the staff check-in route when the guest arrives.
-        Validates the current status before transitioning so a reservation
-        can't be activated twice or after cancellation.
-
-        Raises:
-            ValueError if the reservation is not in PENDING status.
-        """
+    def check_in_guest(self, session: Any) -> None:
+       
         if self.status != ReservationStatus.PENDING:
             raise ValueError(
                 f"Cannot check in: reservation is '{self.status}', expected 'pending'."
@@ -127,18 +89,8 @@ class Reservation(Base):
         session.add(self)
         session.commit()
 
-    def check_out_guest(self, session: Session) -> None:
-        """
-        Transition: ACTIVE → CHECKED_OUT.
-
-        Called by the staff checkout route. Transitions the reservation status
-        then immediately purges PII from the linked Guest row.
-        Both changes happen in the same commit — no window where status is
-        checked_out but PII still exists.
-
-        Raises:
-            ValueError if the reservation is not in ACTIVE status.
-        """
+    def check_out_guest(self, session: Any) -> None:
+       
         if self.status != ReservationStatus.ACTIVE:
             raise ValueError(
                 f"Cannot check out: reservation is '{self.status}', expected 'active'."
@@ -151,19 +103,12 @@ class Reservation(Base):
         # Purge guest PII atomically in the same transaction
         if self.guest is not None:
             self.guest.purge_pii(session)
+            session.commit()
         else:
             session.commit()
 
-    def cancel(self, session: Session) -> None:
-        """
-        Transition: PENDING → CANCELLED.
-
-        Only pending reservations can be cancelled. Active stays must be
-        checked out through the normal flow first.
-
-        Raises:
-            ValueError if the reservation is not in PENDING status.
-        """
+    def cancel(self, session: Any) -> None:
+        
         if self.status != ReservationStatus.PENDING:
             raise ValueError(
                 f"Cannot cancel: reservation is '{self.status}', expected 'pending'."
@@ -176,11 +121,8 @@ class Reservation(Base):
     # Query helpers
 
     @classmethod
-    def get_active(cls, session: Session) -> list[Reservation]:
-        """
-        Return all currently active reservations.
-        Used by the staff dashboard to show who is currently checked in.
-        """
+    def get_active(cls, session: Any) -> list[Reservation]:
+       
         stmt = (
             select(cls)
             .where(cls.status == ReservationStatus.ACTIVE)
@@ -189,12 +131,8 @@ class Reservation(Base):
         return list(session.scalars(stmt).all())
 
     @classmethod
-    def get_pending(cls, session: Session) -> list[Reservation]:
-        """
-        Return all pending reservations (arriving guests).
-        Filtered to check_in >= today so historical pending records
-        from cancelled stays don't surface.
-        """
+    def get_pending(cls, session: Any) -> list[Reservation]:
+        
         stmt = (
             select(cls)
             .where(
@@ -206,11 +144,8 @@ class Reservation(Base):
         return list(session.scalars(stmt).all())
 
     @classmethod
-    def get_by_room(cls, session: Session, room_id: int) -> list[Reservation]:
-        """
-        Return all non-cancelled reservations for a specific room.
-        Used by front desk to check room availability before booking.
-        """
+    def get_by_room(cls, session: Any, room_id: int) -> list[Reservation]:
+        
         stmt = (
             select(cls)
             .where(
@@ -222,7 +157,7 @@ class Reservation(Base):
         return list(session.scalars(stmt).all())
 
     @classmethod
-    def get_by_guest(cls, session: Session, guest_id: int) -> list[Reservation]:
+    def get_by_guest(cls, session: Any, guest_id: int) -> list[Reservation]:
         """Return all reservations linked to a specific guest row."""
         stmt = select(cls).where(cls.guest_id == guest_id).order_by(cls.check_in)
         return list(session.scalars(stmt).all())
