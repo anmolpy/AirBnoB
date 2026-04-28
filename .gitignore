@@ -1,0 +1,6 @@
+./.pytest_cache
+./venv
+commit-log.txt
+kdg
+./tests/__pycache__
+./backend/__pycache__

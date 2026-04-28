@@ -1,21 +1,3 @@
-"""
-AirBnoB — Flask Application Factory
-=====================================
-backend/app.py
-
-Usage:
-    # Development
-    flask --app app run --debug
-
-    # Production (Gunicorn)
-    gunicorn "app:create_app('production')" -w 4 -b 0.0.0.0:5000
-
-Environment variables required in production:
-    FLASK_ENV=production
-    JWT_SECRET_KEY=<strong-random-secret>
-    DATABASE_URL=postgresql+psycopg://user:pass@host:5432/airbnob
-"""
-
 from __future__ import annotations
 
 import os
@@ -42,16 +24,7 @@ limiter = Limiter(
 
 # Application factory
 def create_app(config_name: str | None = None) -> Flask:
-    """
-    Create and configure a Flask application instance.
-
-    Args:
-        config_name: 'development' | 'production' | 'testing'
-                     Falls back to FLASK_ENV env var, then 'development'.
-
-    Returns:
-        A fully configured Flask app.
-    """
+   
     app = Flask(__name__)
 
     # Load config

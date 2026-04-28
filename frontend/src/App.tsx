@@ -4,6 +4,7 @@ import AdminLogin from "./pages/AdminLogin";
 import GuestBooking from "./pages/GuestBooking";
 import GuestCheckin from "./pages/GuestCheckin";
 import StaffDashboard from "./pages/StaffDashboard";
+import Navbar from "./components/navbar";
 
 function Home() {
   return (
@@ -77,15 +78,18 @@ function Home() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/book" element={<GuestBooking />} />
-      <Route path="/guest/book" element={<GuestBooking />} />
-      <Route path="/login" element={<AdminLogin redirectTo="/staff" />} />
-      <Route path="/staff" element={<StaffDashboard loginPath="/login" />} />
-      <Route path="/guest" element={<GuestCheckin />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <Navbar />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/book" element={<GuestBooking />} />
+        <Route path="/guest/book" element={<GuestBooking />} />
+        <Route path="/login" element={<AdminLogin redirectTo="/staff" />} />
+        <Route path="/staff" element={<StaffDashboard loginPath="/login" />} />
+        <Route path="/guest" element={<GuestCheckin />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
 
