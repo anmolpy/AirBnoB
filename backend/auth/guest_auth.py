@@ -51,10 +51,9 @@ def verify_guest_token():
         _log_attempt("token_not_found")
         return jsonify(error("Invalid or expired token.")), 401
 
-    if not guest.is_valid_token():
-        outcome = "token_expired" if guest.is_expired() else "token_inactive"
-        _log_attempt(outcome, guest)
-        return jsonify(error("Invalid or expired token.")), 401
+    if not guest.is_viewable_token():
+        _log_attempt("token_checked_out", guest)
+        return jsonify(error("This booking has been checked out and is no longer accessible.")), 401
 
     token = create_access_token(
         identity=str(guest.id),
