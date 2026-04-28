@@ -78,6 +78,10 @@ export const reservationsApi = {
     });
   },
 
+  getByToken(token: string) {
+    return apiRequest<Reservation>(`/staff/reservations/by-token/${token}`);
+  },
+
   availability(query: AvailabilityQuery) {
     return apiRequest<AvailabilityResponse>("/staff/availability", {
       query,

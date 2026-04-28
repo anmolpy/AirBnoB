@@ -251,6 +251,34 @@ def check_out_guest():
     ), 200
 
 
+@staff_bp.get("/reservations/by-token/<string:token>")
+@require_role(StaffRole.ADMIN, StaffRole.FRONT_DESK)
+def get_reservation_by_token(token: str):
+    """Look up a reservation by guest QR token. Used by staff QR check-in panel."""
+    from sqlalchemy.orm import selectinload
+    stmt = (
+        select(Guest)
+        .where(Guest.token == token)
+    )
+    guest = db.session.scalars(stmt).first()
+
+    if guest is None:
+        return jsonify(error("No guest found for that token.")), 404
+
+    stmt = (
+        select(Reservation)
+        .options(selectinload(Reservation.guest))
+        .where(Reservation.guest_id == guest.id)
+        .order_by(Reservation.created_at.desc())
+    )
+    reservation = db.session.scalars(stmt).first()
+
+    if reservation is None:
+        return jsonify(error("No reservation found for that token.")), 404
+
+    return jsonify(ReservationOut.from_orm_with_guest(reservation).model_dump(mode="json")), 200
+
+
 @staff_bp.get("/availability")
 @require_role(StaffRole.ADMIN, StaffRole.FRONT_DESK)
 def check_availability():
