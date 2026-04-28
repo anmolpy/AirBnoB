@@ -2,15 +2,6 @@ import { NavLink } from "react-router-dom";
 
 import { useAuth } from "../auth";
 
-const NAV_ITEMS = [
-  { to: "/", label: "Home", end: true },
-  { to: "/book", label: "Book a room" },
-  { to: "/guest/book", label: "Guest booking" },
-  { to: "/guest", label: "Guest check-in" },
-  { to: "/login", label: "Staff login" },
-  { to: "/staff", label: "Staff dashboard" },
-] as const;
-
 export default function Navbar() {
   const { isAuthenticated, session, logout } = useAuth();
 
@@ -23,19 +14,50 @@ export default function Navbar() {
         </NavLink>
 
         <nav aria-label="Primary navigation" style={styles.nav}>
-          {NAV_ITEMS.map((item) => (
+          <NavLink
+            to="/"
+            end
+            style={({ isActive }) => ({
+              ...styles.navItem,
+              ...(isActive ? styles.navItemActive : null),
+            })}
+          >
+            Home
+          </NavLink>
+
+          <NavLink
+            to="/book"
+            style={({ isActive }) => ({
+              ...styles.navItem,
+              ...(isActive ? styles.navItemActive : null),
+            })}
+          >
+            Book a room
+          </NavLink>
+
+          {!isAuthenticated && (
             <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
+              to="/login"
               style={({ isActive }) => ({
                 ...styles.navItem,
                 ...(isActive ? styles.navItemActive : null),
               })}
             >
-              {item.label}
+              Staff login
             </NavLink>
-          ))}
+          )}
+
+          {isAuthenticated && (
+            <NavLink
+              to="/staff"
+              style={({ isActive }) => ({
+                ...styles.navItem,
+                ...(isActive ? styles.navItemActive : null),
+              })}
+            >
+              Staff dashboard
+            </NavLink>
+          )}
         </nav>
 
         <div style={styles.authBox}>

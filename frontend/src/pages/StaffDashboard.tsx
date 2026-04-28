@@ -166,6 +166,11 @@ export default function StaffDashboard({
   );
   const [actionBusyKey, setActionBusyKey] = useState<string | null>(null);
 
+  const [qrToken, setQrToken] = useState("");
+  const [qrCheckinLoading, setQrCheckinLoading] = useState(false);
+  const [qrCheckinError, setQrCheckinError] = useState<string | null>(null);
+  const [qrCheckinSuccess, setQrCheckinSuccess] = useState<string | null>(null);
+
   const [staffList, setStaffList] = useState<StaffSession[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffError, setStaffError] = useState<string | null>(null);
@@ -192,22 +197,30 @@ export default function StaffDashboard({
     setReservationsError(null);
 
     try {
-      const response = await reservationsApi.list({
-        status: filters.status || undefined,
-        room_id: filters.roomId ? Number(filters.roomId) : undefined,
-      });
+      const [listResponse, freshDetail] = await Promise.all([
+        reservationsApi.list({
+          status: filters.status || undefined,
+          room_id: filters.roomId ? Number(filters.roomId) : undefined,
+        }),
+        nextSelectedReservationId
+          ? reservationsApi.getById(nextSelectedReservationId)
+          : Promise.resolve(null),
+      ]);
 
-      setReservations(response.reservations);
+      setReservations(listResponse.reservations);
 
-      const desiredSelection =
-        nextSelectedReservationId ?? selectedReservationId ?? response.reservations[0]?.id ?? null;
-      setSelectedReservationId(desiredSelection);
-
-      if (desiredSelection) {
-        const reservation = await reservationsApi.getById(desiredSelection);
-        setSelectedReservation(reservation);
+      if (freshDetail) {
+        setSelectedReservationId(freshDetail.id);
+        setSelectedReservation(freshDetail);
       } else {
-        setSelectedReservation(null);
+        const firstId = listResponse.reservations[0]?.id ?? null;
+        setSelectedReservationId(firstId);
+        if (firstId) {
+          const first = await reservationsApi.getById(firstId);
+          setSelectedReservation(first);
+        } else {
+          setSelectedReservation(null);
+        }
       }
     } catch (error) {
       setReservationsError(
@@ -376,22 +389,69 @@ export default function StaffDashboard({
       if (action === "checkin") {
         await reservationsApi.checkIn({ reservation_id: reservationId });
         setReservationActionSuccess(`Reservation #${reservationId} checked in.`);
+        await loadReservations(reservationId);
       } else if (action === "checkout") {
         await reservationsApi.checkOut({ reservation_id: reservationId });
         setReservationActionSuccess(`Reservation #${reservationId} checked out.`);
+        setSelectedReservation(null);
+        setSelectedReservationId(null);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await loadReservations(reservationId);
       } else {
         await reservationsApi.cancel(reservationId, { reason: cancelReason });
         setReservationActionSuccess(`Reservation #${reservationId} cancelled.`);
         setCancelReason("");
+        setSelectedReservation(null);
+        setSelectedReservationId(null);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await loadReservations(reservationId);
       }
-
-      await loadReservations(reservationId);
     } catch (error) {
       setReservationActionError(
         friendlyError(error, "We could not complete that reservation action."),
       );
     } finally {
       setActionBusyKey(null);
+    }
+  }
+
+  async function handleQrCheckin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setQrCheckinLoading(true);
+    setQrCheckinError(null);
+    setQrCheckinSuccess(null);
+
+    try {
+      // Find the reservation by looking up all pending reservations
+      // and matching via the guest token through the guest auth verify endpoint
+      const { guestAuthApi } = await import('../api');
+      const session = await guestAuthApi.verify({ token: qrToken.trim() });
+      const reservation = await guestAuthApi.reservation();
+
+      if (!reservation) {
+        setQrCheckinError('No reservation found for this token.');
+        return;
+      }
+
+      if (reservation.status !== 'pending') {
+        setQrCheckinError(
+          reservation.status === 'active'
+            ? 'Guest is already checked in.'
+            : `Cannot check in: reservation is ${reservation.status}.`
+        );
+        return;
+      }
+
+      await reservationsApi.checkIn({ reservation_id: reservation.id });
+      setQrCheckinSuccess(
+        `Guest checked in successfully. Room ${session.room_id}, Reservation #${reservation.id}.`
+      );
+      setQrToken('');
+      await loadReservations(reservation.id);
+    } catch (error) {
+      setQrCheckinError(friendlyError(error, 'We could not complete the check-in.'));
+    } finally {
+      setQrCheckinLoading(false);
     }
   }
 
@@ -687,6 +747,32 @@ export default function StaffDashboard({
           </div>
 
           <div style={styles.column}>
+            <Panel
+              title="Guest QR Check-in"
+              subtitle="Enter the token from a guest's QR code to look up and check them in instantly."
+            >
+              <form onSubmit={(e) => void handleQrCheckin(e)} style={styles.form}>
+                <Field label="QR / access token">
+                  <input
+                    autoComplete="off"
+                    value={qrToken}
+                    onChange={(event) => setQrToken(event.target.value)}
+                    placeholder="123e4567-e89b-42d3-a456-426614174000"
+                    style={styles.input}
+                  />
+                </Field>
+                <button
+                  type="submit"
+                  disabled={qrCheckinLoading || qrToken.trim().length === 0}
+                  style={styles.primaryButton}
+                >
+                  {qrCheckinLoading ? "Checking in..." : "Check in guest"}
+                </button>
+              </form>
+              {qrCheckinError ? <p style={{ ...styles.errorText, marginTop: "12px" }}>{qrCheckinError}</p> : null}
+              {qrCheckinSuccess ? <p style={{ ...styles.successText, marginTop: "12px" }}>{qrCheckinSuccess}</p> : null}
+            </Panel>
+
             <Panel
               title="Reservation detail"
               subtitle="Inspect the selected reservation and run the allowed lifecycle actions."

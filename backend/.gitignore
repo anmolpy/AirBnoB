@@ -12,6 +12,11 @@ env/
 *.db
 *.sqlite3
 
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
 # Environment variables
 .env
 .env.*
