@@ -1026,7 +1026,7 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
-    background: "#f8fafc",
+    background: "#f4fff4",
     padding: "32px",
     fontFamily:
       'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -1044,7 +1044,7 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "flex-start",
     gap: "16px",
     background: "#ffffff",
-    border: "1px solid #e2e8f0",
+    border: "1px solid rgba(47, 111, 18, 0.06)",
     borderRadius: "8px",
     padding: "28px 32px",
     boxShadow: "0 10px 28px rgba(15, 23, 42, 0.05)",
@@ -1078,7 +1078,7 @@ const styles: Record<string, CSSProperties> = {
   },
   metricCard: {
     background: "#ffffff",
-    border: "1px solid #e2e8f0",
+    border: "1px solid rgba(47, 111, 18, 0.06)",
     borderRadius: "8px",
     padding: "18px 20px",
     display: "grid",

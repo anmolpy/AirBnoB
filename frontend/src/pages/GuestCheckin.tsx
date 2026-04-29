@@ -180,16 +180,15 @@ const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     padding: "32px 24px 48px",
-    background:
-      "radial-gradient(circle at top left, rgba(217, 119, 6, 0.18), transparent 34%), linear-gradient(180deg, #111827 0%, #1f2937 50%, #f9fafb 50%, #f9fafb 100%)",
-    color: "#111827",
+    background: "#f4fff4",
+    color: "#07260a",
     fontFamily:
       'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
   heroCard: {
     maxWidth: "960px",
     margin: "0 auto",
-    background: "rgba(255, 255, 255, 0.96)",
+    background: "#e8ffdd",
     border: "1px solid rgba(255, 255, 255, 0.24)",
     borderRadius: "24px",
     padding: "32px",
@@ -202,7 +201,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 700,
     letterSpacing: "0.16em",
     textTransform: "uppercase",
-    color: "#92400e",
+    color: "#2f6f12",
   },
   title: { margin: 0, fontSize: "clamp(30px, 5vw, 52px)", lineHeight: 1, color: "#111827" },
   subtitle: { margin: 0, maxWidth: "68ch", fontSize: "15px", lineHeight: 1.6, color: "#4b5563" },

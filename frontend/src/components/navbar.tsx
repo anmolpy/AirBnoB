@@ -10,7 +10,7 @@ export default function Navbar() {
       <div style={styles.inner}>
         <NavLink to="/" end style={styles.brandLink}>
           <span style={styles.brandMark}>AirBnoB</span>
-          <span style={styles.brandText}>Privacy-first hotel booking</span>
+          
         </NavLink>
 
         <nav aria-label="Primary navigation" style={styles.nav}>
@@ -88,12 +88,13 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 50,
     padding: "14px 20px",
     backdropFilter: "blur(16px)",
-    background: "rgba(8, 17, 31, 0.84)",
-    borderBottom: "1px solid rgba(148, 163, 184, 0.18)",
+    fontFamily: "'Inter', 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    borderBottom: "1px solid rgba(47, 111, 18, 0.08)",
   },
   inner: {
-    maxWidth: "1180px",
-    margin: "0 auto",
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "0 20px",
     display: "flex",
     alignItems: "center",
     gap: "16px",
@@ -104,19 +105,17 @@ const styles: Record<string, React.CSSProperties> = {
     display: "grid",
     gap: "2px",
     textDecoration: "none",
-    color: "#f8fafc",
+    color: "#afef93",
     minWidth: "fit-content",
   },
   brandMark: {
-    fontSize: "13px",
+    fontSize: "15px",
     fontWeight: 900,
     letterSpacing: "0.18em",
     textTransform: "uppercase",
+    fontFamily: "'Poppins', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
   },
-  brandText: {
-    fontSize: "12px",
-    color: "#cbd5e1",
-  },
+  
   nav: {
     display: "flex",
     alignItems: "center",
@@ -132,16 +131,17 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: "38px",
     padding: "0 14px",
     borderRadius: "999px",
-    color: "#e2e8f0",
+    color: "#096529",
     textDecoration: "none",
     fontSize: "14px",
     fontWeight: 600,
+    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
     border: "1px solid transparent",
     background: "rgba(255, 255, 255, 0.04)",
   },
   navItemActive: {
-    background: "rgba(245, 158, 11, 0.18)",
-    borderColor: "rgba(245, 158, 11, 0.35)",
+    background: "rgba(136, 198, 129, 0.8)",
+    borderColor: "rgba(57, 194, 75, 0.35)",
     color: "#fff7ed",
   },
   authBox: {
@@ -161,30 +161,35 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: "0.12em",
     textTransform: "uppercase",
     color: "#cbd5e1",
+    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
   },
   sessionName: {
     fontSize: "13px",
-    color: "#f8fafc",
+    color: "#acea80",
+    fontFamily: "'Poppins', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
   },
   sessionRole: {
     fontSize: "12px",
-    color: "#fbbf24",
+    color: "#1d5612",
     textTransform: "uppercase",
     letterSpacing: "0.08em",
+    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
   },
   logoutButton: {
     minHeight: "38px",
     padding: "0 14px",
     borderRadius: "999px",
-    border: "1px solid rgba(248, 250, 252, 0.18)",
-    background: "rgba(255, 255, 255, 0.06)",
+    border: "1px solid rgba(41, 96, 37, 0.18)",
+    background: "rgba(19, 76, 28, 0.6)",
     color: "#f8fafc",
     fontSize: "14px",
     fontWeight: 700,
+    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
     cursor: "pointer",
   },
   signedOut: {
     fontSize: "13px",
-    color: "#cbd5e1",
+    color: "#1a291c",
+    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
   },
 };

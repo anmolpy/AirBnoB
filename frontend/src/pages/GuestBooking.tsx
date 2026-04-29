@@ -279,9 +279,8 @@ const styles: Record<string, CSSProperties> = {
   page: {
     minHeight: "100vh",
     padding: "32px 24px 48px",
-    background:
-      "radial-gradient(circle at top left, rgba(217, 119, 6, 0.16), transparent 30%), radial-gradient(circle at top right, rgba(15, 23, 42, 0.12), transparent 24%), linear-gradient(180deg, #0f172a 0%, #111827 44%, #f8fafc 44%, #f8fafc 100%)",
-    color: "#111827",
+    background: "#f4fff4",
+    color: "#07260a",
     fontFamily:
       'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
@@ -294,8 +293,12 @@ const styles: Record<string, CSSProperties> = {
     alignItems: "start",
   },
   copyPanel: {
-    padding: "12px 0 0",
-    color: "#f8fafc",
+    padding: "32px",
+    borderRadius: "28px",
+    background: "#e8ffdd",
+    color: "#07260a",
+    border: "1px solid rgba(47, 111, 18, 0.06)",
+    boxShadow: "0 20px 48px rgba(15, 23, 39, 0.06)",
   },
   eyebrow: {
     margin: 0,
@@ -303,7 +306,7 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     letterSpacing: "0.18em",
     textTransform: "uppercase",
-    color: "#f59e0b",
+    color: "#2f6f12",
   },
   title: {
     margin: "14px 0 0",
@@ -317,7 +320,7 @@ const styles: Record<string, CSSProperties> = {
     maxWidth: "58ch",
     fontSize: "17px",
     lineHeight: 1.7,
-    color: "#cbd5e1",
+    color: "#145214",
   },
   noteRow: {
     display: "grid",
@@ -328,8 +331,8 @@ const styles: Record<string, CSSProperties> = {
   noteCard: {
     padding: "18px 18px 16px",
     borderRadius: "18px",
-    background: "rgba(255, 255, 255, 0.08)",
-    border: "1px solid rgba(255, 255, 255, 0.12)",
+    background: "rgba(255, 255, 255, 0.9)",
+    border: "1px solid rgba(47, 111, 18, 0.06)",
   },
   noteTitle: {
     display: "block",
@@ -343,11 +346,11 @@ const styles: Record<string, CSSProperties> = {
     fontSize: "14px",
   },
   formCard: {
-    background: "rgba(255, 255, 255, 0.96)",
+    background: "#ffffff",
     borderRadius: "28px",
     padding: "28px",
-    border: "1px solid rgba(148, 163, 184, 0.18)",
-    boxShadow: "0 28px 64px rgba(15, 23, 42, 0.18)",
+    border: "1px solid rgba(47, 111, 18, 0.06)",
+    boxShadow: "0 28px 64px rgba(15, 23, 42, 0.06)",
   },
   form: {
     display: "grid",
@@ -380,8 +383,8 @@ const styles: Record<string, CSSProperties> = {
     minHeight: "48px",
     borderRadius: "14px",
     border: "none",
-    background: "#111827",
-    color: "#fff",
+    background: "#166534",
+    color: "#ffffff",
     fontWeight: 800,
     cursor: "pointer",
   },
