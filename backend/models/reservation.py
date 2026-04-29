@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from enum import StrEnum
+from enum import Enum
+
+try:
+    from enum import StrEnum
+except ImportError:
+    class StrEnum(str, Enum):
+        pass
 
 from sqlalchemy import Date, DateTime, ForeignKey, String, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
