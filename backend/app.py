@@ -69,8 +69,11 @@ def _load_config(app: Flask, config_name: str | None) -> None:
     }
 
     resolved = config_name or os.environ.get("FLASK_ENV", "development")
-    config_cls = config_map.get(resolved, DevelopmentConfig)
+    if resolved not in config_map:
+        raise ValueError("Unknown application configuration")
+    config_cls = config_map[resolved]
     app.config.from_object(config_cls)
+    app.config["APP_ENV"] = resolved
 
 
 def _assert_production_safe(app: Flask) -> None:
@@ -79,14 +82,15 @@ def _assert_production_safe(app: Flask) -> None:
     Raises immediately if debug mode is on or the JWT secret is default
     in a production environment.
     """
-    env = os.environ.get("FLASK_ENV", "development")
+    env = app.config["APP_ENV"]
     if env == "production":
         if app.debug:
             raise RuntimeError(
                 "FATAL: Flask debug mode is enabled in a production environment. "
                 "Set FLASK_DEBUG=0 or FLASK_ENV=production without debug=True."
             )
-        if app.config.get("JWT_SECRET_KEY") == "CHANGE_ME_IN_PROD":
+        secret = app.config.get("JWT_SECRET_KEY")
+        if not isinstance(secret, str) or len(secret) < 32 or secret == "CHANGE_ME_IN_PROD":
             raise RuntimeError(
                 "FATAL: JWT_SECRET_KEY has not been set for production. "
                 "Set the JWT_SECRET_KEY environment variable to a strong random secret."
