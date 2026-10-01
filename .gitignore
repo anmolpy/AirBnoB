@@ -4,3 +4,11 @@ commit-log.txt
 kdg
 ./tests/__pycache__
 ./backend/__pycache__
+# Local databases must never be committed
+*.db
+*.sqlite
+*.sqlite3
+
+__pycache__/
+*.py[cod]
+.pytest_cache/

@@ -95,12 +95,10 @@ class Guest(Base):
 
     def is_viewable_token(self) -> bool:
         """
-        A token is viewable for status lookup if the guest has not yet
-        checked out. Date window is not checked — guests should be able
-        to view their booking status before check-in and after check-out
-        date as long as PII has not been purged.
+        Permit pre-arrival status lookup, but never extend access past the
+        booked checkout date merely because scheduled cleanup has not run.
         """
-        return self.checked_out_at is None
+        return self.checked_out_at is None and not self.is_expired()
 
     def is_expired(self) -> bool:
         """Token is expired if today is past the check_out date."""
